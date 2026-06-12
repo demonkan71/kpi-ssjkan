@@ -263,14 +263,6 @@ body{background:#f7f3ee;color:#3d3d3d}
     </div>
 
     <div class="gs-modal-row">
-      <label class="gs-modal-label">🌍 Published CSV URL <span style="color:#c45a5a;font-size:10px;font-weight:400">(ต้องใช้สำหรับ GitHub Pages หรือแชร์ออนไลน์)</span></label>
-      <input class="gs-modal-input" id="gsPubUrl" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" style="font-size:11px">
-      <div style="margin-top:4px;font-size:10px;color:#8a8a8a;line-height:1.5">
-        ⚡ วิธีหา: File → Share → <strong>Publish to web</strong> → เลือกชีต Q2_69 → Format CSV → Publish → คัดลอก URL
-      </div>
-    </div>
-
-    <div class="gs-modal-row">
       <label class="gs-modal-label">⏱️ อัปเดตอัตโนมัติทุก</label>
       <select class="gs-modal-input" id="gsInterval" style="background:#fff;max-width:200px">
         <option value="30">30 วินาที</option>
@@ -369,7 +361,7 @@ d.push({c:5,id:'36.2',n:'จำนวนผลิตภัณฑ์พัฒน�
 loadKM();
 
 //=== GOOGLE SHEETS CONNECTION ===
-var GS_CFG = {id:'',gid:'',pubUrl:'',interval:60,timer:null,lastSync:null};
+var GS_CFG = {id:'',gid:'',interval:60,timer:null,lastSync:null};
 var GS_RAW_DATA = null;
 (function(){try{var s=localStorage.getItem('ssj_gs_cfg');if(s){var c=JSON.parse(s);if(c&&c.id){GS_CFG=c;}}}catch(e){}})();
 
@@ -379,7 +371,6 @@ function showGSSettings(){
   if(GS_CFG.id){
     document.getElementById('gsId').value=GS_CFG.id;
     document.getElementById('gsGid').value=GS_CFG.gid||'0';
-    document.getElementById('gsPubUrl').value=GS_CFG.pubUrl||'';
     document.getElementById('gsUrl').value='https://docs.google.com/spreadsheets/d/'+GS_CFG.id+'/edit'+(GS_CFG.gid?'#gid='+GS_CFG.gid:'');
     document.getElementById('gsInterval').value=GS_CFG.interval||0;
     document.getElementById('gsConnectLabel').textContent='อัปเดตการเชื่อมต่อ';
@@ -398,19 +389,16 @@ function parseGSURL(){
     document.getElementById('gsId').value=idMatch[1];
     if(gidMatch)document.getElementById('gsGid').value=gidMatch[1];else document.getElementById('gsGid').value='0';
     showPreview();
-  } else {
-    document.getElementById('gsId').value='';document.getElementById('gsGid').value='';
-    document.getElementById('gsPreview').style.display='none';
-  }
+  } else {document.getElementById('gsId').value='';document.getElementById('gsGid').value='';document.getElementById('gsPreview').style.display='none';}
 }
 function showPreview(){
   var sid=document.getElementById('gsId').value,gid=document.getElementById('gsGid').value||'0';
   if(!sid){document.getElementById('gsPreview').style.display='none';return;}
   document.getElementById('gsPreview').style.display='block';
   document.getElementById('gsPreview').innerHTML='<div style="text-align:center;padding:10px;color:#b0a8a0"><i class="fas fa-spinner fa-spin me-2"></i>กำลังอ่านตัวอย่าง...</div>';
-  fetchSheetCSV(sid,gid,function(err,rows){
+  fetchFromSheet(sid,gid,function(err,rows){
     var el=document.getElementById('gsPreview');
-    if(err||!rows||rows.length<3){el.innerHTML='<div style="color:#d4a84a;font-size:12px">⚠️ ไม่สามารถอ่านตัวอย่างได้<br>วิธีแก้: ใช้ "Publish to web" ตามคู่มือด้านล่าง</div>';return;}
+    if(err||!rows||rows.length<3){el.innerHTML='<div style="color:#d4a84a;font-size:12px">⚠️ ไม่สามารถอ่านตัวอย่างได้ (ต้องตั้งค่า Share เป็น "Anyone with link")</div>';return;}
     var html='<div style="font-size:11px;color:#b0a8a0;margin-bottom:6px">📋 แสดง '+Math.min(rows.length,12)+' แถวแรก</div><table><thead><tr>';
     for(var c=0;c<Math.min(rows[0].length,6);c++)html+='<th>'+(rows[0][c]||'')+'</th>';
     html+='<th>...</th></tr></thead><tbody>';
@@ -422,69 +410,67 @@ function showPreview(){
     html+='</tbody></table>';el.innerHTML=html;
   });
 }
-//=== CORE FETCH: Published CSV (works everywhere incl GitHub Pages) ===
-function fetchSheetCSV(sheetId,gid,callback){
-  var pubUrl=document.getElementById('gsPubUrl')?document.getElementById('gsPubUrl').value.trim():'';
-  // Method 1: Published CSV URL (from Publish to Web — HAS CORS headers)
-  if(pubUrl){
-    fetch(pubUrl).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(function(t){callback(null,parseCSV(t));}).catch(function(e){callback(e,null);});
-    return;
-  }
-  // Method 2: Direct export fetch (might not have CORS)
-  var csvUrl='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(sheetId)+'/export?format=csv&gid='+encodeURIComponent(gid);
-  fetch(csvUrl).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(function(t){callback(null,parseCSV(t));}).catch(function(){
-    // Method 3: JSONP fallback (Google Visualization API - no CORS)
-    fetchViaJSONP(sheetId,gid,callback);
+// Fetch: JSONP first, then CORS proxy fallback
+function fetchFromSheet(sid,gid,cb){
+  fetchViaJSONP(sid,gid,function(err,rows){
+    if(!err&&rows)return cb(null,rows);
+    fetchCSVProxy(sid,gid,cb);
   });
 }
-function fetchViaJSONP(sheetId,gid,callback){
-  var ts=Date.now(),handler='gs_jsonp_'+ts;
-  window[handler]=function(resp){
+function fetchViaJSONP(sid,gid,cb){
+  var ts=Date.now(),h='gs_jp_'+ts;
+  window[h]=function(r){
     try{
-      if(resp.status!=='ok'){callback(new Error('Sheet error'),null);return;}
-      var t=resp.table,cols=t.cols.length,rows=[];
-      for(var ri=0;ri<t.rows.length;ri++){var row=t.rows[ri],arr=[],rowEl=row.c||[];for(var ci=0;ci<cols;ci++){var cell=rowEl[ci]||{};arr.push(cell.v!==undefined&&cell.v!==null?cell.v:'');}rows.push(arr);}
-      window[handler]=undefined;callback(null,rows);
-    }catch(e){callback(e,null);}
+      if(r.status!=='ok'){cb(new Error('sheet err'),null);return;}
+      var t=r.table,c=t.cols.length,rows=[];
+      for(var ri=0;ri<t.rows.length;ri++){var row=t.rows[ri],arr=[],rc=row.c||[];for(var ci=0;ci<c;ci++){var cell=rc[ci]||{};arr.push(cell.v!==undefined&&cell.v!==null?cell.v:'');}rows.push(arr);}
+      window[h]=undefined;cb(null,rows);
+    }catch(e){cb(e,null);}
   };
   var s=document.createElement('script');
-  s.src='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(sheetId)+'/gviz/tq?tqx=out:json;responseHandler:'+handler+'&tq=&gid='+encodeURIComponent(gid)+'&ts='+ts;
-  s.onerror=function(){window[handler]=undefined;callback(new Error('JSONP fail'),null);};
+  s.src='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(sid)+'/gviz/tq?tqx=out:json;responseHandler:'+h+'&tq=&gid='+encodeURIComponent(gid)+'&ts='+ts;
+  s.onerror=function(){window[h]=undefined;cb(new Error('JSONP fail'),null);};
   document.head.appendChild(s);
-  setTimeout(function(){if(window[handler]){window[handler]=undefined;callback(new Error('JSONP timeout'),null);}},8000);
+  setTimeout(function(){if(window[h]){window[h]=undefined;cb(new Error('JSONP timeout'),null);}},8000);
+}
+function fetchCSVProxy(sid,gid,cb){
+  var url='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(sid)+'/export?format=csv&gid='+encodeURIComponent(gid);
+  var xhr=new XMLHttpRequest();
+  xhr.open('GET','https://api.allorigins.win/raw?url='+encodeURIComponent(url),true);
+  xhr.timeout=15000;
+  xhr.onload=function(){if(xhr.status>=200&&xhr.status<400){cb(null,parseCSV(xhr.responseText));}else{cb(new Error('HTTP '+xhr.status),null);}};
+  xhr.onerror=function(){cb(new Error('Network'),null);};xhr.ontimeout=function(){cb(new Error('Timeout'),null);};xhr.send();
 }
 function parseCSV(text){
   var lines=text.split(/\r?\n/),rows=[];
   for(var i=0;i<lines.length;i++){
     var line=lines[i].trim();if(!line)continue;
-    var fields=[],current='',inQuote=false;
+    var fields=[],cur='',inq=false;
     for(var ci=0;ci<line.length;ci++){
       var ch=line[ci];
-      if(inQuote){if(ch==='"'){if(ci+1<line.length&&line[ci+1]==='"'){current+='"';ci++;}else inQuote=false;}else current+=ch;}
-      else{if(ch==='"')inQuote=true;else if(ch===','){fields.push(current);current='';}else current+=ch;}
+      if(inq){if(ch==='"'){if(ci+1<line.length&&line[ci+1]==='"'){cur+='"';ci++;}else inq=false;}else cur+=ch;}
+      else{if(ch==='"')inq=true;else if(ch===','){fields.push(cur);cur='';}else cur+=ch;}
     }
-    fields.push(current);rows.push(fields);
+    fields.push(cur);rows.push(fields);
   }
   return rows;
 }
-function setSyncStatus(state,label){
-  var el=document.getElementById('syncStatus'),dot=document.getElementById('syncDot'),lbl=document.getElementById('syncLabel');
-  el.className='sync-status '+state;
-  dot.className='sync-dot '+(state==='connected'?'on':state==='syncing'?'busy':'off');
-  lbl.textContent=label||(state==='connected'?(GS_CFG.lastSync?'อัปเดต '+GS_CFG.lastSync:'เชื่อมต่อ'):'ไม่ได้เชื่อมต่อ');
+function setSyncStatus(st,lb){
+  document.getElementById('syncStatus').className='sync-status '+st;
+  document.getElementById('syncDot').className='sync-dot '+(st==='connected'?'on':st==='syncing'?'busy':'off');
+  document.getElementById('syncLabel').textContent=lb||(st==='connected'?(GS_CFG.lastSync?'อัปเดต '+GS_CFG.lastSync:'เชื่อมต่อ'):'ไม่ได้เชื่อมต่อ');
 }
 function connectSheet(){
   var sid=document.getElementById('gsId').value.trim(),gid=document.getElementById('gsGid').value.trim()||'0';
-  var pubUrl=document.getElementById('gsPubUrl')?document.getElementById('gsPubUrl').value.trim():'';
   var interval=parseInt(document.getElementById('gsInterval').value)||0,el=document.getElementById('gsError');
   el.style.display='none';if(!sid){el.textContent='⚠️ ไม่พบ Spreadsheet ID';el.style.display='block';return;}
   setSyncStatus('syncing','กำลังเชื่อมต่อ...');document.getElementById('gsConnectLabel').textContent='กำลังทดสอบ...';
-  fetchSheetCSV(sid,gid,function(err,rows){
+  fetchFromSheet(sid,gid,function(err,rows){
     if(err||!rows||rows.length<5){
-      el.textContent='⚠️ เชื่อมต่อไม่ได้: '+(err?err.message:'ข้อมูลไม่เพียงพอ')+'  → ใช้วิธี "Publish to web" ตามคู่มือด้านล่าง';el.style.display='block';
+      el.textContent='⚠️ เชื่อมต่อไม่ได้: '+(err?err.message:'ข้อมูลไม่เพียงพอ')+' ตรวจสอบว่า Share เป็น "Anyone with link"';el.style.display='block';
       setSyncStatus('disconnected','เชื่อมต่อล้มเหลว');document.getElementById('gsConnectLabel').textContent='เชื่อมต่อ';return;
     }
-    GS_CFG={id:sid,gid:gid,pubUrl:pubUrl,interval:interval,lastSync:new Date().toLocaleString('th-TH')};
+    GS_CFG={id:sid,gid:gid,interval:interval,lastSync:new Date().toLocaleString('th-TH')};
     localStorage.setItem('ssj_gs_cfg',JSON.stringify(GS_CFG));
     parseSheetData(rows);closeGSSettings();setSyncStatus('connected','เชื่อมต่อแล้ว · '+GS_CFG.lastSync);
     setupAutoRefresh();document.getElementById('syncBtn').style.display='';
@@ -498,12 +484,12 @@ function removeConnection(){
 function setupAutoRefresh(){
   if(GS_CFG.timer){clearInterval(GS_CFG.timer);GS_CFG.timer=null;}
   if(!GS_CFG.id||!GS_CFG.interval||GS_CFG.interval<=0)return;
-  GS_CFG.timer=setInterval(function(){fetchSheetCSV(GS_CFG.id,GS_CFG.gid,function(err,rows){if(err)return;parseSheetData(rows);});},GS_CFG.interval*1000);
+  GS_CFG.timer=setInterval(function(){fetchFromSheet(GS_CFG.id,GS_CFG.gid,function(err,rows){if(err)return;parseSheetData(rows);});},GS_CFG.interval*1000);
 }
 function manualSync(){
   if(!GS_CFG.id){Swal.fire({icon:'info',title:'ยังไม่ได้เชื่อมต่อ',text:'กรุณาตั้งค่า Google Sheets ก่อน',background:'#fff',confirmButtonColor:'#7ec8c8',color:'#4a4a4a'});return;}
   setSyncStatus('syncing','กำลังซิงค์...');
-  fetchSheetCSV(GS_CFG.id,GS_CFG.gid,function(err,rows){
+  fetchFromSheet(GS_CFG.id,GS_CFG.gid,function(err,rows){
     if(err){setSyncStatus('connected','ซิงค์ล้มเหลว');Swal.fire({icon:'error',title:'ซิงค์ล้มเหลว',text:err.message,background:'#fff',confirmButtonColor:'#7ec8c8',color:'#4a4a4a'});return;}
     parseSheetData(rows);GS_CFG.lastSync=new Date().toLocaleString('th-TH');
     localStorage.setItem('ssj_gs_cfg',JSON.stringify(GS_CFG));
@@ -537,7 +523,7 @@ function parseSheetData(rows){
   init();
 }
 (function(){try{if(GS_CFG&&GS_CFG.id){setTimeout(function(){var s=localStorage.getItem('ssj_kpi');if(s){try{KP=JSON.parse(s);if(KP.length){document.getElementById('impScr').style.display='none';document.getElementById('dash').style.display='block';document.getElementById('topAct').style.display='block';}}catch(e){}}
-fetchSheetCSV(GS_CFG.id,GS_CFG.gid||'0',function(err,rows){if(!err&&rows&&rows.length>5){parseSheetData(rows);GS_CFG.lastSync=new Date().toLocaleString('th-TH');setSyncStatus('connected','เชื่อมต่อแล้ว · '+GS_CFG.lastSync);setupAutoRefresh();document.getElementById('syncBtn').style.display='';}});},500);}}catch(e){}})();
+fetchFromSheet(GS_CFG.id,GS_CFG.gid||'0',function(err,rows){if(!err&&rows&&rows.length>5){parseSheetData(rows);GS_CFG.lastSync=new Date().toLocaleString('th-TH');setSyncStatus('connected','เชื่อมต่อแล้ว · '+GS_CFG.lastSync);setupAutoRefresh();document.getElementById('syncBtn').style.display='';}});},500);}}catch(e){}})();
 
 //=== PARSE CRITERIA ===
 function parseCriteria(raw){
