@@ -212,7 +212,7 @@ body{background:#f7f3ee;color:#3d3d3d}
     </table>
   </div>
   <div class="card mt-3">
-    <div class="card-header"><i class="fas fa-chart-line me-2" style="color:#7ec8c8"></i>เปรียบเทียบผลงาน Top 15</div>
+    <div class="card-header"><i class="fas fa-chart-line me-2" style="color:#7ec8c8"></i>เปรียบเทียบผลงาน 5 อันดับแรก</div>
     <div class="card-body">
       <div class="chart-container" style="height:300px"><canvas id="qCompChart"></canvas></div>
     </div>
@@ -302,7 +302,7 @@ var STRATS = {
   4:{n:'Governance Excellence',f:'บริหารจัดการ',c:PASTEL.strat4,ic:'fa-building'},
   5:{n:'Health Economy',f:'เศรษฐกิจสุขภาพ',c:PASTEL.strat5,ic:'fa-coins'}
 };
-var KP = [], charts = {}, curCm = 'all';
+var KP = [], charts = {}, curCm = 'all', DATA_VER = 2;
 var KPI_METHODS = [];
 
 //=== KPI METHODS DATABASE ===
@@ -363,6 +363,9 @@ loadKM();
 //=== GOOGLE SHEETS CONNECTION ===
 var GS_CFG = {id:'',gid:'',interval:60,timer:null,lastSync:null};
 var GS_RAW_DATA = null;
+// Clear old localStorage if data version mismatch
+(function(){try{var sv=localStorage.getItem('ssj_kpi_ver');if(sv&&parseInt(sv)!==DATA_VER){localStorage.removeItem('ssj_kpi');localStorage.removeItem('ssj_gs_cfg');}localStorage.setItem('ssj_kpi_ver',DATA_VER+'');}catch(e){}})();
+// Load saved GS config
 (function(){try{var s=localStorage.getItem('ssj_gs_cfg');if(s){var c=JSON.parse(s);if(c&&c.id){GS_CFG=c;}}}catch(e){}})();
 
 function showGSSettings(){
@@ -498,11 +501,11 @@ function manualSync(){
   });
 }
 function parseSheetData(rows){
-  var allKP=[],lastStrat='';
+  var allKP=[],lastStrat='',stratNum=0;
   for(var r=0;r<rows.length;r++){
     var row=rows[r];if(!row||!Array.isArray(row))continue;
     var colA=String(row[0]||'').trim(),colD=String(row[3]||'').trim();
-    if(colD.indexOf('ยุทธศาสตร์')>=0){lastStrat=colD;continue;}
+    if(/^\d+\.?\s*ยุทธศาสตร์/.test(colD)){stratNum=parseInt(colD,10)||0;lastStrat=colD;continue;}
     if(/^\d+\.\s*โครงการ/.test(colD))continue;
     if(!colA||colA==='ตัวที่'||colA==='ที่'||colA==='eof'||colA==='ตัว'||isNaN(parseFloat(colA)))continue;
     var id=parseFloat(colA).toString();if(/^[A-Z]\s*=/.test(colD))continue;if(!colD)continue;
@@ -510,8 +513,8 @@ function parseSheetData(rows){
     if(!crit.op){var dw=['ตาย','เสียชีวิต','บาดเจ็บ','ติดเชื้อ','STEMI','Sepsis','CKD Stage 5','RTI','อุบัติเหตุ','อัตราป่วยตาย','ฆ่าตัวตาย'];for(var di=0;di<dw.length;di++){if(colD.indexOf(dw[di])>=0){dir='lower';break;}}}
     var distVals={};for(var d=0;d<DISTS.length;d++){distVals[DISTS[d]]=parseVal(row[6+d]);}
     var provTotal=parseVal(row[19]);if(provTotal===null){var nums=[];for(var d=0;d<DISTS.length;d++){if(distVals[DISTS[d]]!==null)nums.push(distVals[DISTS[d]]);}if(nums.length)provTotal=Math.round(nums.reduce(function(a,b){return a+b;},0)*100)/100;}
-    var cm=String(row[5]||'').trim(),sn=5;
-    if(lastStrat.indexOf('1.')>=0||lastStrat.indexOf('PP&P')>=0||lastStrat.indexOf('ส่งเสริม')>=0)sn=1;else if(lastStrat.indexOf('2.')>=0||lastStrat.indexOf('Service')>=0||lastStrat.indexOf('บริการเป็นเลิศ')>=0)sn=2;else if(lastStrat.indexOf('3.')>=0||lastStrat.indexOf('People')>=0||lastStrat.indexOf('บุคลากร')>=0)sn=3;else if(lastStrat.indexOf('4.')>=0||lastStrat.indexOf('Governance')>=0||lastStrat.indexOf('บริหารจัดการ')>=0)sn=4;
+    var cm=String(row[5]||'').trim();
+    var sn=stratNum>=1&&stratNum<=5?stratNum:5;
     var cn=colD.replace(/^[\d.]+\s*/,'').trim(),act=provTotal,cv=crit.val,st='wait';
     if(act!==null&&cv!==null&&rawCrit!=='Q4'&&rawCrit!==''&&rawCrit!=='-'){st=dir==='lower'?(act<=cv?'pass':'fail'):(act>=cv?'pass':'fail');}
     var pg=0;if(act!==null&&cv!==null&&cv>0){pg=Math.min(100,Math.round((dir==='lower'?cv/act:act/cv)*100));}
@@ -551,11 +554,11 @@ function imp(e){
       var wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
       var q2Raw=wb.Sheets['Q2_69']?XLSX.utils.sheet_to_json(wb.Sheets['Q2_69'],{header:1,defval:''}):[];
       if(!q2Raw.length)throw new Error('ไม่พบชีต Q2_69');
-      var allKP=[],lastStrat='';
+      var allKP=[],lastStrat='',stratNum=0;
       for(var r=0;r<q2Raw.length;r++){
         var row=q2Raw[r];if(!row||!Array.isArray(row))continue;
         var colA=String(row[0]||'').trim(),colD=String(row[3]||'').trim();
-        if(colD.indexOf('ยุทธศาสตร์')>=0){lastStrat=colD;continue;}
+        if(/^\d+\.?\s*ยุทธศาสตร์/.test(colD)){stratNum=parseInt(colD,10)||0;lastStrat=colD;continue;}
         if(/^\d+\.\s*โครงการ/.test(colD))continue;
         if(!colA||colA==='ตัวที่'||colA==='ที่'||colA==='eof'||colA==='ตัว'||isNaN(parseFloat(colA)))continue;
         var id=parseFloat(colA).toString();if(/^[A-Z]\s*=/.test(colD))continue;if(!colD)continue;
@@ -563,8 +566,8 @@ function imp(e){
         if(!crit.op){var dw=['ตาย','เสียชีวิต','บาดเจ็บ','ติดเชื้อ','STEMI','Sepsis','CKD Stage 5','RTI','อุบัติเหตุ','อัตราป่วยตาย','ฆ่าตัวตาย'];for(var di=0;di<dw.length;di++){if(colD.indexOf(dw[di])>=0){dir='lower';break;}}}
         var distVals={};for(var d=0;d<DISTS.length;d++){distVals[DISTS[d]]=parseVal(row[6+d]);}
         var provTotal=parseVal(row[19]);if(provTotal===null){var nums=[];for(var d=0;d<DISTS.length;d++){if(distVals[DISTS[d]]!==null)nums.push(distVals[DISTS[d]]);}if(nums.length)provTotal=Math.round(nums.reduce(function(a,b){return a+b;},0)*100)/100;}
-        var cm=String(row[5]||'').trim(),sn=5;
-        if(lastStrat.indexOf('1.')>=0||lastStrat.indexOf('PP&P')>=0||lastStrat.indexOf('ส่งเสริม')>=0)sn=1;else if(lastStrat.indexOf('2.')>=0||lastStrat.indexOf('Service')>=0||lastStrat.indexOf('บริการเป็นเลิศ')>=0)sn=2;else if(lastStrat.indexOf('3.')>=0||lastStrat.indexOf('People')>=0||lastStrat.indexOf('บุคลากร')>=0)sn=3;else if(lastStrat.indexOf('4.')>=0||lastStrat.indexOf('Governance')>=0||lastStrat.indexOf('บริหารจัดการ')>=0)sn=4;
+        var cm=String(row[5]||'').trim();
+        var sn=stratNum>=1&&stratNum<=5?stratNum:5;
         var cn=colD.replace(/^[\d.]+\s*/,'').trim(),act=provTotal,cv=crit.val,st='wait';
         if(act!==null&&cv!==null&&rawCrit!=='Q4'&&rawCrit!==''&&rawCrit!=='-'){st=dir==='lower'?(act<=cv?'pass':'fail'):(act>=cv?'pass':'fail');}
         var pg=0;if(act!==null&&cv!==null&&cv>0){pg=Math.min(100,Math.round((dir==='lower'?cv/act:act/cv)*100));}
@@ -683,15 +686,66 @@ function renderKPIs(){
   document.getElementById('kpiGrid').innerHTML=html||'<div class="text-center py-5" style="color:#b0a8a0">ไม่มีข้อมูล</div>';
 }
 
-//=== KPI DETAIL ===
+//=== KPI DETAIL (TOP 5 DISTRICTS + CHART) ===
 function showDetailByRef(idx){
   if(idx<0||idx>=KP.length)return;
   var k=KP[idx],cr=k.criteriaParsed,cDisp=fmtTxt(k.criteria);
   if(cr.val!==null&&cr.op)cDisp=cr.op+' '+fmt(cr.val);else if(cr.val!==null)cDisp=fmt(cr.val);
-  var html='<div class="card"><div class="card-header" style="background:#faf8f5"><i class="fas fa-search me-2" style="color:'+PASTEL.tealDark+'"></i>'+k.name+'</div><div class="card-body" style="padding:12px 16px">'+
-    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:13px;color:'+PASTEL.text+'">'+
-      '<span><strong style="color:'+PASTEL.textMute+'">เกณฑ์:</strong> '+cDisp+'</span><span><strong style="color:'+PASTEL.textMute+'">ประเภท:</strong> '+(k.logic==='lower'?'ยิ่งน้อยยิ่งดี':'ยิ่งมากยิ่งดี')+'</span>'+
-      '<span><strong style="color:'+PASTEL.textMute+'">ยุทธศาสตร์:</strong> <span style="color:'+k.stratC+'">'+k.stratN+'</span></span></div>'+
+  
+  // Build district array with values, sort by value desc, take top 5
+  var dlist=[];
+  for(var d=0;d<DISTS.length;d++){
+    var v=k.districtValues[DISTS[d]];
+    if(v!==null)dlist.push({name:DISTS[d],val:v});
+  }
+  dlist.sort(function(a,b){return b.val-a.val;});
+  var top5=dlist.slice(0,5);
+  var bestVal=top5.length?top5[0].val:1;
+  var worstVal=top5.length?top5[top5.length-1].val:0;
+  
+  // Build CSS bar chart
+  var chartHtml='<div style="margin-bottom:14px">';
+  for(var i=0;i<top5.length;i++){
+    var di=top5[i];
+    var barPct=Math.max(5,Math.round((di.val/bestVal)*100));
+    var barColor=di.val>=bestVal?PASTEL.success:(di.val<=worstVal?PASTEL.danger:PASTEL.tealDark);
+    chartHtml+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'+
+      '<span style="min-width:75px;font-size:11px;color:'+PASTEL.textMute+'">'+di.name+'</span>'+
+      '<div style="flex:1;height:22px;background:#f0ebe4;border-radius:6px;overflow:hidden">'+
+        '<div style="width:'+barPct+'%;height:100%;background:'+barColor+';border-radius:6px;display:flex;align-items:center;padding-left:8px;transition:width.5s">'+
+          '<span style="font-size:10px;font-weight:600;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.15)">'+fmt(di.val)+'</span>'+
+        '</div></div></div>';
+  }
+  chartHtml+='</div>';
+  
+  // Build table (province total only)
+  var pst='<span class="wait-badge" style="font-size:10px">-</span>';
+  if(k.value!==null&&cr.val!==null){pst=k.status==='pass'?'<span class="pass-badge" style="font-size:10px">ผ่าน</span>':'<span class="fail-badge" style="font-size:10px">ไม่ผ่าน</span>';}
+  
+  var html='<div class="card" style="margin-bottom:10px"><div class="card-header" style="background:#faf8f5;padding:12px 16px;font-size:13px"><i class="fas fa-search me-2" style="color:'+PASTEL.tealDark+'"></i>'+k.name+'</div><div class="card-body" style="padding:14px">'+
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:'+PASTEL.text+'">'+
+      '<span><strong style="color:'+PASTEL.textMute+'">เกณฑ์:</strong> '+cDisp+'</span>'+
+      '<span><strong style="color:'+PASTEL.textMute+'">ประเภท:</strong> '+(k.logic==='lower'?'ยิ่งน้อยยิ่งดี':'ยิ่งมากยิ่งดี')+'</span>'+
+      '<span><strong style="color:'+PASTEL.textMute+'">ยุทธศาสตร์:</strong> <span style="color:'+k.stratC+'">'+k.stratN+'</span></span>'+
+    '</div>'+
+    '<div style="font-size:11px;color:'+PASTEL.textMute+';margin-bottom:6px"><i class="fas fa-trophy me-1" style="color:'+PASTEL.warning+'"></i>5 อำเภอสูงสุด</div>'+
+    chartHtml+
+    '<table class="table table-bordered" style="font-size:12px"><tbody>'+
+    '<tr style="background:#faf8f5"><td><strong>🏛️ ภาพรวมจังหวัด</strong></td><td><strong>'+(k.value!==null?fmt(k.value):'-')+'</strong></td><td>'+cDisp+'</td><td>'+pst+'</td></tr>'+
+    '</tbody></table>'+
+    '<div style="text-align:center;margin-top:6px"><span onclick="showAllDistricts('+idx+')" style="cursor:pointer;font-size:11px;color:'+PASTEL.tealDark+'"><i class="fas fa-chevron-down me-1"></i>แสดงทั้ง 13 อำเภอ</span></div>'+
+  '</div></div>';
+  
+  Swal.fire({title:k.name,html:html,width:'700px',background:'#fff',confirmButtonColor:'#7ec8c8',color:'#4a4a4a',showCloseButton:true});
+}
+function showDetail(idx){showDetailByRef(idx);}
+
+function showAllDistricts(idx){
+  if(idx<0||idx>=KP.length)return;
+  var k=KP[idx],cr=k.criteriaParsed,cDisp=fmtTxt(k.criteria);
+  if(cr.val!==null&&cr.op)cDisp=cr.op+' '+fmt(cr.val);else if(cr.val!==null)cDisp=fmt(cr.val);
+  var html='<div class="card"><div class="card-header" style="background:#faf8f5;padding:12px 16px;font-size:13px"><i class="fas fa-list me-2" style="color:'+PASTEL.tealDark+'"></i>'+k.name+' — ทั้ง 13 อำเภอ</div>'+
+    '<div class="card-body" style="padding:12px">'+
     '<table class="table table-bordered" style="font-size:12px"><thead><tr><th>อำเภอ</th><th>ผลงาน</th><th>เทียบเกณฑ์</th><th>สถานะ</th></tr></thead><tbody>';
   for(var d=0;d<DISTS.length;d++){
     var v=k.districtValues[DISTS[d]],st='<span class="wait-badge" style="font-size:9px">-</span>';
@@ -701,11 +755,9 @@ function showDetailByRef(idx){
   }
   var pst='<span class="wait-badge" style="font-size:9px">-</span>';
   if(k.value!==null&&cr.val!==null){pst=k.status==='pass'?'<span class="pass-badge" style="font-size:9px">ผ่าน</span>':'<span class="fail-badge" style="font-size:9px">ไม่ผ่าน</span>';}
-  html+='<tr style="background:#faf8f5"><td><strong>🏛️ กาญจนบุรี</strong></td><td><strong>'+(k.value!==null?fmt(k.value):'-')+'</strong></td><td></td><td>'+pst+'</td></tr>';
-  html+='</tbody></table></div></div>';
+  html+='<tr style="background:#faf8f5"><td><strong>🏛️ กาญจนบุรี</strong></td><td><strong>'+(k.value!==null?fmt(k.value):'-')+'</strong></td><td></td><td>'+pst+'</td></tr></tbody></table></div></div>';
   Swal.fire({title:k.name,html:html,width:'750px',background:'#fff',confirmButtonColor:'#7ec8c8',color:'#4a4a4a',showCloseButton:true});
 }
-function showDetail(idx){showDetailByRef(idx);}
 
 //=== QUARTERLY TABLE ===
 function rQ(){
@@ -729,7 +781,7 @@ function rQ(){
 }
 function rQCompChart(l){
   var ctx=document.getElementById('qCompChart').getContext('2d');if(charts.qc)charts.qc.destroy();
-  var sorted=l.slice().sort(function(a,b){return (b.value||0)-(a.value||0);}),top=sorted.slice(0,15);
+  var sorted=l.slice().sort(function(a,b){return (b.value||0)-(a.value||0);}),top=sorted.slice(0,5);
   if(!top.length)return;
   var lb=[],d1=[];for(var i=0;i<top.length;i++){var nm=top[i].name;if(nm.length>25)nm=nm.substring(0,23)+'..';lb.push(nm);d1.push(top[i].value!==null?top[i].value:0);}
   charts.qc=new Chart(ctx,{type:'bar',data:{labels:lb,datasets:[{label:'ผลงาน Q2',data:d1,backgroundColor:function(ctx){var v=ctx.dataset.data[ctx.dataIndex],k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null){var pss=k.logic==='lower'?v<=k.criteriaParsed.val:v>=k.criteriaParsed.val;return pss?PASTEL.chartGreen:PASTEL.chartRed;}return'rgba(126,200,200,0.6)';},borderColor:function(ctx){var v=ctx.dataset.data[ctx.dataIndex],k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null){var pss=k.logic==='lower'?v<=k.criteriaParsed.val:v>=k.criteriaParsed.val;return pss?PASTEL.chartGreenBorder:PASTEL.chartRedBorder;}return'#7ec8c8';},borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a8a8a',font:{size:10,family:'Prompt'},boxWidth:12}},tooltip:{callbacks:{afterLabel:function(ctx){var k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null)return 'เกณฑ์: '+k.criteria;return '';}}}},scales:{x:{grid:{color:'#f0ebe4'},ticks:{color:'#8a8a8a',font:{size:9}}},y:{grid:{display:false},ticks:{color:'#8a8a8a',font:{size:9,family:'Prompt'}}}}}});
@@ -764,7 +816,7 @@ function filtr(c,b){
 }
 
 //=== AUTO-LOAD ===
-(function(){try{if(GS_CFG&&GS_CFG.id)return;var s=localStorage.getItem('ssj_kpi');if(s){KP=JSON.parse(s);if(KP.length){document.getElementById('impScr').style.display='none';document.getElementById('dash').style.display='block';document.getElementById('topAct').style.display='block';init();}}}catch(e){}})();
+(function(){try{if(GS_CFG&&GS_CFG.id)return;var sv=localStorage.getItem('ssj_kpi_ver');if(sv&&parseInt(sv)!==DATA_VER){localStorage.removeItem('ssj_kpi');return;}var s=localStorage.getItem('ssj_kpi');if(s){KP=JSON.parse(s);if(KP.length){document.getElementById('impScr').style.display='none';document.getElementById('dash').style.display='block';document.getElementById('topAct').style.display='block';init();}}}catch(e){}})();
 </script>
 </body>
 </html>
