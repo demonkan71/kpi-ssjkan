@@ -164,7 +164,7 @@ body{background:#f7f3ee;color:#3d3d3d}
     <div class="card-header"><i class="fas fa-radar me-2" style="color:#7ec8c8"></i>Radar Chart · เปรียบเทียบคะแนนแต่ละยุทธศาสตร์</div>
     <div class="card-body">
       <div class="strat-sel" id="radarTabs"></div>
-      <div id="radarContainer" style="position:relative;height:280px"><canvas id="radarMain"></canvas></div>
+      <div id="radarContainer" style="position:relative;min-height:320px"><canvas id="radarMain"></canvas></div>
     </div>
   </div>
 
@@ -302,7 +302,7 @@ var STRATS = {
   4:{n:'Governance Excellence',f:'บริหารจัดการ',c:PASTEL.strat4,ic:'fa-building'},
   5:{n:'Health Economy',f:'เศรษฐกิจสุขภาพ',c:PASTEL.strat5,ic:'fa-coins'}
 };
-var KP = [], charts = {}, curCm = 'all', DATA_VER = 2;
+var KP = [], charts = {}, curCm = 'all', DATA_VER = 3;
 var KPI_METHODS = [];
 
 //=== KPI METHODS DATABASE ===
@@ -364,7 +364,7 @@ loadKM();
 var GS_CFG = {id:'',gid:'',interval:60,timer:null,lastSync:null};
 var GS_RAW_DATA = null;
 // Clear old localStorage if data version mismatch
-(function(){try{var sv=localStorage.getItem('ssj_kpi_ver');if(sv&&parseInt(sv)!==DATA_VER){localStorage.removeItem('ssj_kpi');localStorage.removeItem('ssj_gs_cfg');}localStorage.setItem('ssj_kpi_ver',DATA_VER+'');}catch(e){}})();
+(function(){try{var sv=localStorage.getItem('ssj_kpi_ver');if(!sv||parseInt(sv)!==DATA_VER){localStorage.removeItem('ssj_kpi');localStorage.removeItem('ssj_gs_cfg');}localStorage.setItem('ssj_kpi_ver',DATA_VER+'');}catch(e){}})();
 // Load saved GS config
 (function(){try{var s=localStorage.getItem('ssj_gs_cfg');if(s){var c=JSON.parse(s);if(c&&c.id){GS_CFG=c;}}}catch(e){}})();
 
@@ -509,16 +509,19 @@ function parseSheetData(rows){
     if(/^\d+\.\s*โครงการ/.test(colD))continue;
     if(!colA||colA==='ตัวที่'||colA==='ที่'||colA==='eof'||colA==='ตัว'||isNaN(parseFloat(colA)))continue;
     var id=parseFloat(colA).toString();if(/^[A-Z]\s*=/.test(colD))continue;if(!colD)continue;
-    var rawCrit=String(row[4]||''),crit=parseCriteria(rawCrit),dir=crit.dir;
+    var rawCrit=String(row[4]||'').trim();
+    var critMeaning=String(row[5]||'').trim();
+    // Skip if both criteria and meaning are empty
+    if(!rawCrit && !critMeaning)continue;
+    var crit=parseCriteria(rawCrit),dir=crit.dir;
     if(!crit.op){var dw=['ตาย','เสียชีวิต','บาดเจ็บ','ติดเชื้อ','STEMI','Sepsis','CKD Stage 5','RTI','อุบัติเหตุ','อัตราป่วยตาย','ฆ่าตัวตาย'];for(var di=0;di<dw.length;di++){if(colD.indexOf(dw[di])>=0){dir='lower';break;}}}
     var distVals={};for(var d=0;d<DISTS.length;d++){distVals[DISTS[d]]=parseVal(row[6+d]);}
     var provTotal=parseVal(row[19]);if(provTotal===null){var nums=[];for(var d=0;d<DISTS.length;d++){if(distVals[DISTS[d]]!==null)nums.push(distVals[DISTS[d]]);}if(nums.length)provTotal=Math.round(nums.reduce(function(a,b){return a+b;},0)*100)/100;}
-    var cm=String(row[5]||'').trim();
     var sn=stratNum>=1&&stratNum<=5?stratNum:5;
     var cn=colD.replace(/^[\d.]+\s*/,'').trim(),act=provTotal,cv=crit.val,st='wait';
     if(act!==null&&cv!==null&&rawCrit!=='Q4'&&rawCrit!==''&&rawCrit!=='-'){st=dir==='lower'?(act<=cv?'pass':'fail'):(act>=cv?'pass':'fail');}
     var pg=0;if(act!==null&&cv!==null&&cv>0){pg=Math.min(100,Math.round((dir==='lower'?cv/act:act/cv)*100));}
-    allKP.push({idRaw:id,name:cn,fullName:colD,criteria:rawCrit,criteriaParsed:crit,criteriaMeaning:cm,value:act,districtValues:distVals,logic:dir,status:st,progress:pg,sn:sn,stratN:STRATS[sn]?STRATS[sn].n:'อื่นๆ',stratF:STRATS[sn]?STRATS[sn].f:'',stratC:STRATS[sn]?STRATS[sn].c:'#8a8a8a'});
+    allKP.push({idRaw:id,name:cn,fullName:colD,criteria:rawCrit,criteriaParsed:crit,criteriaMeaning:critMeaning,value:act,districtValues:distVals,logic:dir,status:st,progress:pg,sn:sn,stratN:STRATS[sn]?STRATS[sn].n:'อื่นๆ',stratF:STRATS[sn]?STRATS[sn].f:'',stratC:STRATS[sn]?STRATS[sn].c:'#8a8a8a'});
   }
   if(!allKP.length){setSyncStatus('connected','ไม่มีข้อมูล KPI');return;}
   KP=allKP;localStorage.setItem('ssj_kpi',JSON.stringify(KP));
@@ -562,16 +565,18 @@ function imp(e){
         if(/^\d+\.\s*โครงการ/.test(colD))continue;
         if(!colA||colA==='ตัวที่'||colA==='ที่'||colA==='eof'||colA==='ตัว'||isNaN(parseFloat(colA)))continue;
         var id=parseFloat(colA).toString();if(/^[A-Z]\s*=/.test(colD))continue;if(!colD)continue;
-        var rawCrit=String(row[4]||''),crit=parseCriteria(rawCrit),dir=crit.dir;
+        var rawCrit=String(row[4]||'').trim();
+        var critMeaning=String(row[5]||'').trim();
+        if(!rawCrit && !critMeaning)continue;
+        var crit=parseCriteria(rawCrit),dir=crit.dir;
         if(!crit.op){var dw=['ตาย','เสียชีวิต','บาดเจ็บ','ติดเชื้อ','STEMI','Sepsis','CKD Stage 5','RTI','อุบัติเหตุ','อัตราป่วยตาย','ฆ่าตัวตาย'];for(var di=0;di<dw.length;di++){if(colD.indexOf(dw[di])>=0){dir='lower';break;}}}
         var distVals={};for(var d=0;d<DISTS.length;d++){distVals[DISTS[d]]=parseVal(row[6+d]);}
         var provTotal=parseVal(row[19]);if(provTotal===null){var nums=[];for(var d=0;d<DISTS.length;d++){if(distVals[DISTS[d]]!==null)nums.push(distVals[DISTS[d]]);}if(nums.length)provTotal=Math.round(nums.reduce(function(a,b){return a+b;},0)*100)/100;}
-        var cm=String(row[5]||'').trim();
         var sn=stratNum>=1&&stratNum<=5?stratNum:5;
         var cn=colD.replace(/^[\d.]+\s*/,'').trim(),act=provTotal,cv=crit.val,st='wait';
         if(act!==null&&cv!==null&&rawCrit!=='Q4'&&rawCrit!==''&&rawCrit!=='-'){st=dir==='lower'?(act<=cv?'pass':'fail'):(act>=cv?'pass':'fail');}
         var pg=0;if(act!==null&&cv!==null&&cv>0){pg=Math.min(100,Math.round((dir==='lower'?cv/act:act/cv)*100));}
-        allKP.push({idRaw:id,name:cn,fullName:colD,criteria:rawCrit,criteriaParsed:crit,criteriaMeaning:cm,value:act,districtValues:distVals,logic:dir,status:st,progress:pg,sn:sn,stratN:STRATS[sn]?STRATS[sn].n:'อื่นๆ',stratF:STRATS[sn]?STRATS[sn].f:'',stratC:STRATS[sn]?STRATS[sn].c:'#8a8a8a'});
+        allKP.push({idRaw:id,name:cn,fullName:colD,criteria:rawCrit,criteriaParsed:crit,criteriaMeaning:critMeaning,value:act,districtValues:distVals,logic:dir,status:st,progress:pg,sn:sn,stratN:STRATS[sn]?STRATS[sn].n:'อื่นๆ',stratF:STRATS[sn]?STRATS[sn].f:'',stratC:STRATS[sn]?STRATS[sn].c:'#8a8a8a'});
       }
       if(!allKP.length)throw new Error('ไม่พบข้อมูล KPI');
       KP=allKP;localStorage.setItem('ssj_kpi',JSON.stringify(KP));
@@ -599,8 +604,16 @@ function showP(p,b){
   if(p==='kpis')renderKPIs();if(p==='quarterly')rQ();if(p==='overview')renderAll();
 }
 function renderAll(){rO();renderKPIs();rQ();radarRender();}
-function fmt(v){return v!==null&&!isNaN(v)?Number(Number(v).toFixed(2)):'-';}
+function fmt(v){
+  if(v===null||isNaN(v))return '-';
+  var s=Number(v).toFixed(2);
+  if(s.endsWith('.00'))s=s.slice(0,-3);
+  var p=s.split('.');
+  p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  return p.join('.');
+}
 function fmtTxt(v){return v!==null&&v!==''&&v!=='-'?String(v):'-';}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 //=== OVERVIEW ===
 function rO(){
@@ -653,10 +666,13 @@ function radarRender(){
   if(!sk.length){container.innerHTML='<div style="text-align:center;padding:60px 20px;color:#b0a8a0"><i class="fas fa-chart-pie" style="font-size:36px;margin-bottom:12px;display:block;color:#d0c8c0"></i>ยังไม่มีข้อมูลในยุทธศาสตร์นี้</div>';return;}
   if(!container.querySelector('canvas')){container.innerHTML='<canvas id="radarMain"></canvas>';}
   var ctx=document.getElementById('radarMain').getContext('2d');
-  sk.sort(function(a,b){return b.value-a.value;});if(sk.length>8)sk=sk.slice(0,8);
-  var lb=[],dt=[];for(var i=0;i<sk.length;i++){var nm=sk[i].name;if(nm.length>22)nm=nm.substring(0,20)+'..';lb.push(nm);var v=sk[i].value,cr=sk[i].criteriaParsed,mx=cr&&cr.val?cr.val*2:100;if(v!==null)dt.push(Math.min(100,Math.round((v/mx)*100)));else dt.push(0);}
+  sk.sort(function(a,b){return b.value-a.value;});
+  var lb=[],dt=[];for(var i=0;i<sk.length;i++){var nm=sk[i].name;if(nm.length>18)nm=nm.substring(0,16)+'..';lb.push(nm);var v=sk[i].value,cr=sk[i].criteriaParsed,mx=cr&&cr.val?cr.val*2:100;if(v!==null)dt.push(Math.min(100,Math.round((v/mx)*100)));else dt.push(0);}
   var sc=STRATS[curRadarSn]?STRATS[curRadarSn].c:'#7ec8c8';
-  charts.radar=new Chart(ctx,{type:'radar',data:{labels:lb,datasets:[{label:'ผลงานเทียบเกณฑ์',data:dt,backgroundColor:sc+'15',borderColor:sc,borderWidth:2,pointBackgroundColor:sc,pointBorderColor:'#fff',pointBorderWidth:1,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,scales:{r:{min:0,max:100,grid:{color:'#f0ebe4'},angleLines:{color:'#f0ebe4'},pointLabels:{color:'#8a8a8a',font:{size:9,family:'Prompt'}},ticks:{backdropColor:'transparent',color:'#b0a8a0',font:{size:8}}}},plugins:{legend:{labels:{color:'#8a8a8a',font:{size:10,family:'Prompt'}}}}}});
+  var many=sk.length>10;
+  var ptSize=many?6:9;
+  var lbSize=many?7:9;
+  charts.radar=new Chart(ctx,{type:'radar',data:{labels:lb,datasets:[{label:'ผลงานเทียบเกณฑ์',data:dt,backgroundColor:sc+'15',borderColor:sc,borderWidth:2,pointBackgroundColor:sc,pointBorderColor:'#fff',pointBorderWidth:1,pointRadius:many?2:3}]},options:{responsive:true,maintainAspectRatio:false,scales:{r:{min:0,max:100,grid:{color:'#f0ebe4'},angleLines:{color:'#f0ebe4'},pointLabels:{color:'#8a8a8a',font:{size:lbSize,family:'Prompt'}},ticks:{backdropColor:'transparent',color:'#b0a8a0',font:{size:ptSize}}}},plugins:{legend:{labels:{color:'#8a8a8a',font:{size:10,family:'Prompt'}}}}}});
 }
 
 //=== KPI CARDS ===
@@ -670,7 +686,7 @@ function renderKPIs(){
     var pass=k.status==='pass',fail=k.status==='fail';
     var badge=pass?'<span class="pass-badge"><i class="fas fa-check me-1"></i>ผ่าน</span>':fail?'<span class="fail-badge"><i class="fas fa-times me-1"></i>ไม่ผ่าน</span>':'<span class="wait-badge"><i class="fas fa-clock me-1"></i>รอผลงาน</span>';
     var pct=k.progress,barColor=pct>=80?PASTEL.success:pct>=50?PASTEL.warning:PASTEL.danger;
-    var cDisp=fmtTxt(critRaw);if(critVal.val!==null&&critVal.op)cDisp=critVal.op+' '+fmt(critVal.val);else if(critVal.val!==null)cDisp=fmt(critVal.val);
+    var cDisp=fmtTxt(critRaw).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     var meaning=k.criteriaMeaning?'<span style="color:#b0a8a0;font-size:10px">'+k.criteriaMeaning+'</span>':'';
     (function(idx,kp){
       html+='<div class="kpi-card" onclick="showDetailByRef('+idx+')"><div class="card-body">'+
@@ -689,8 +705,8 @@ function renderKPIs(){
 //=== KPI DETAIL (TOP 5 DISTRICTS + CHART) ===
 function showDetailByRef(idx){
   if(idx<0||idx>=KP.length)return;
-  var k=KP[idx],cr=k.criteriaParsed,cDisp=fmtTxt(k.criteria);
-  if(cr.val!==null&&cr.op)cDisp=cr.op+' '+fmt(cr.val);else if(cr.val!==null)cDisp=fmt(cr.val);
+  var k=KP[idx],cr=k.criteriaParsed,cDisp=esc(fmtTxt(k.criteria));
+  if(cr.val!==null&&cr.op)cDisp=esc(cr.op+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
   
   // Build district array with values, sort by value desc, take top 5
   var dlist=[];
@@ -742,8 +758,8 @@ function showDetail(idx){showDetailByRef(idx);}
 
 function showAllDistricts(idx){
   if(idx<0||idx>=KP.length)return;
-  var k=KP[idx],cr=k.criteriaParsed,cDisp=fmtTxt(k.criteria);
-  if(cr.val!==null&&cr.op)cDisp=cr.op+' '+fmt(cr.val);else if(cr.val!==null)cDisp=fmt(cr.val);
+  var k=KP[idx],cr=k.criteriaParsed,cDisp=esc(fmtTxt(k.criteria));
+  if(cr.val!==null&&cr.op)cDisp=esc(cr.op+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
   var html='<div class="card"><div class="card-header" style="background:#faf8f5;padding:12px 16px;font-size:13px"><i class="fas fa-list me-2" style="color:'+PASTEL.tealDark+'"></i>'+k.name+' — ทั้ง 13 อำเภอ</div>'+
     '<div class="card-body" style="padding:12px">'+
     '<table class="table table-bordered" style="font-size:12px"><thead><tr><th>อำเภอ</th><th>ผลงาน</th><th>เทียบเกณฑ์</th><th>สถานะ</th></tr></thead><tbody>';
@@ -766,8 +782,8 @@ function rQ(){
   document.getElementById('qInfo').textContent='📊 เปรียบเทียบผลงานกับเกณฑ์ ('+l.length+' ตัวชี้วัด)';
   var html='';
   for(var i=0;i<l.length;i++){
-    var k=l[i],cr=k.criteriaParsed,cDisp=fmtTxt(k.criteria);
-    if(cr.val!==null&&cr.op)cDisp=cr.op+' '+fmt(cr.val);else if(cr.val!==null)cDisp=fmt(cr.val);
+    var k=l[i],cr=k.criteriaParsed,cDisp=esc(fmtTxt(k.criteria));
+    if(cr.val!==null&&cr.op)cDisp=esc(cr.op+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
     var st='<span class="wait-badge">⏳ รอ</span>',note='';
     if(k.value!==null&&cr.val!==null){
       st=k.status==='pass'?'<span class="pass-badge">✅ ผ่าน</span>':'<span class="fail-badge">❌ ไม่ผ่าน</span>';
@@ -816,7 +832,7 @@ function filtr(c,b){
 }
 
 //=== AUTO-LOAD ===
-(function(){try{if(GS_CFG&&GS_CFG.id)return;var sv=localStorage.getItem('ssj_kpi_ver');if(sv&&parseInt(sv)!==DATA_VER){localStorage.removeItem('ssj_kpi');return;}var s=localStorage.getItem('ssj_kpi');if(s){KP=JSON.parse(s);if(KP.length){document.getElementById('impScr').style.display='none';document.getElementById('dash').style.display='block';document.getElementById('topAct').style.display='block';init();}}}catch(e){}})();
+(function(){try{if(GS_CFG&&GS_CFG.id)return;var sv=localStorage.getItem('ssj_kpi_ver');if(!sv||parseInt(sv)!==DATA_VER){localStorage.removeItem('ssj_kpi');return;}var s=localStorage.getItem('ssj_kpi');if(s){KP=JSON.parse(s);if(KP.length){document.getElementById('impScr').style.display='none';document.getElementById('dash').style.display='block';document.getElementById('topAct').style.display='block';init();}}}catch(e){}})();
 </script>
 </body>
 </html>
