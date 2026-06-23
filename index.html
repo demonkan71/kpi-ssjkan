@@ -204,7 +204,7 @@ body{background:#f7f3ee;color:#3d3d3d}
           <th>ตัวชี้วัด</th>
           <th>ยุทธศาสตร์</th>
           <th>เกณฑ์</th>
-          <th>ผลงาน Q2</th>
+          <th>ผลงาน</th>
           <th>ประเมินผล</th>
         </tr>
       </thead>
@@ -813,7 +813,7 @@ function rQCompChart(l){
   var sorted=l.slice().sort(function(a,b){return (b.value||0)-(a.value||0);}),top=sorted.slice(0,5);
   if(!top.length)return;
   var lb=[],d1=[];for(var i=0;i<top.length;i++){var nm=top[i].name;if(nm.length>25)nm=nm.substring(0,23)+'..';lb.push(nm);d1.push(top[i].value!==null?top[i].value:0);}
-  charts.qc=new Chart(ctx,{type:'bar',data:{labels:lb,datasets:[{label:'ผลงาน Q2',data:d1,backgroundColor:function(ctx){var v=ctx.dataset.data[ctx.dataIndex],k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null){var pss=k.logic==='lower'?v<=k.criteriaParsed.val:v>=k.criteriaParsed.val;return pss?PASTEL.chartGreen:PASTEL.chartRed;}return'rgba(126,200,200,0.6)';},borderColor:function(ctx){var v=ctx.dataset.data[ctx.dataIndex],k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null){var pss=k.logic==='lower'?v<=k.criteriaParsed.val:v>=k.criteriaParsed.val;return pss?PASTEL.chartGreenBorder:PASTEL.chartRedBorder;}return'#7ec8c8';},borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a8a8a',font:{size:10,family:'Prompt'},boxWidth:12}},tooltip:{callbacks:{afterLabel:function(ctx){var k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null)return 'เกณฑ์: '+k.criteria;return '';}}}},scales:{x:{grid:{color:'#f0ebe4'},ticks:{color:'#8a8a8a',font:{size:9}}},y:{grid:{display:false},ticks:{color:'#8a8a8a',font:{size:9,family:'Prompt'}}}}}});
+  charts.qc=new Chart(ctx,{type:'bar',data:{labels:lb,datasets:[{label:'ผลงาน',data:d1,backgroundColor:function(ctx){var v=ctx.dataset.data[ctx.dataIndex],k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null){var pss=k.logic==='lower'?v<=k.criteriaParsed.val:v>=k.criteriaParsed.val;return pss?PASTEL.chartGreen:PASTEL.chartRed;}return'rgba(126,200,200,0.6)';},borderColor:function(ctx){var v=ctx.dataset.data[ctx.dataIndex],k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null){var pss=k.logic==='lower'?v<=k.criteriaParsed.val:v>=k.criteriaParsed.val;return pss?PASTEL.chartGreenBorder:PASTEL.chartRedBorder;}return'#7ec8c8';},borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8a8a8a',font:{size:10,family:'Prompt'},boxWidth:12}},tooltip:{callbacks:{afterLabel:function(ctx){var k=top[ctx.dataIndex];if(k&&k.criteriaParsed&&k.criteriaParsed.val!==null)return 'เกณฑ์: '+k.criteria;return '';}}}},scales:{x:{grid:{color:'#f0ebe4'},ticks:{color:'#8a8a8a',font:{size:9}}},y:{grid:{display:false},ticks:{color:'#8a8a8a',font:{size:9,family:'Prompt'}}}}}});
 }
 
 //=== EXPORT ===
