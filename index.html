@@ -925,11 +925,21 @@ function fetchViaJSONP(sid,gid,cb){
 }
 function fetchCSVProxy(sid,gid,cb){
   var url='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(sid)+'/export?format=csv&gid='+encodeURIComponent(gid);
-  var xhr=new XMLHttpRequest();
-  xhr.open('GET','https://api.allorigins.win/raw?url='+encodeURIComponent(url),true);
-  xhr.timeout=15000;
-  xhr.onload=function(){if(xhr.status>=200&&xhr.status<400){cb(null,parseCSV(xhr.responseText));}else{cb(new Error('HTTP '+xhr.status),null);}};
-  xhr.onerror=function(){cb(new Error('Network'),null);};xhr.ontimeout=function(){cb(new Error('Timeout'),null);};xhr.send();
+  var proxies=['https://api.allorigins.win/raw?url=','https://corsproxy.io/?'];
+  tryProxy(0);
+  function tryProxy(idx){
+    if(idx>=proxies.length){cb(new Error('All proxies failed'),null);return;}
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET',proxies[idx]+encodeURIComponent(url),true);
+    xhr.timeout=15000;
+    xhr.onload=function(){
+      if(xhr.status>=200&&xhr.status<400){cb(null,parseCSV(xhr.responseText));}
+      else{tryProxy(idx+1);}
+    };
+    xhr.onerror=function(){tryProxy(idx+1);};
+    xhr.ontimeout=function(){tryProxy(idx+1);};
+    xhr.send();
+  }
 }
 function parseCSV(text){
   var lines=text.split(/\r?\n/),rows=[];
