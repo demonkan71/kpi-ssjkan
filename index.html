@@ -591,9 +591,17 @@ function imp(e){
 
 //=== INIT ===
 function init(){
+  // Save current filter selections & radar tab
+  var savedKF=document.getElementById('kfS')?document.getElementById('kfS').value:'';
+  var savedQS=document.getElementById('qS')?document.getElementById('qS').value:'';
+  var savedRadar=curRadarSn;
   var fhtml='<option value="">ทุกยุทธศาสตร์</option>';
   for(var k in STRATS)fhtml+='<option value="'+k+'">'+STRATS[k].n+'</option>';
   ['kfS','qS'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=fhtml;});
+  // Restore saved selections
+  if(document.getElementById('kfS'))document.getElementById('kfS').value=savedKF;
+  if(document.getElementById('qS'))document.getElementById('qS').value=savedQS;
+  curRadarSn=savedRadar;
   radarBuildTabs();renderAll();
   if(GS_CFG&&GS_CFG.id){document.getElementById('syncBtn').style.display='';setSyncStatus(GS_CFG.lastSync?'connected':'disconnected',GS_CFG.lastSync?'เชื่อมต่อแล้ว · '+GS_CFG.lastSync:'เชื่อมต่อแล้ว');}
   else document.getElementById('syncBtn').style.display='none';
