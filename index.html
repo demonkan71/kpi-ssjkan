@@ -837,12 +837,14 @@ function connectSheet(){
   // Fetch all 4 sheets
   var pending=4,promises=[];
   for(var qi=0;qi<4;qi++){
-    promises.push(new Promise(function(resolve,reject){
-      fetchFromSheet(sid,Q_GIDS[qi],function(err,rows){
-        if(err||!rows||rows.length<5){resolve({qi:qi,rows:null});return;}
-        resolve({qi:qi,rows:rows,data:processData(qi,rows)});
-      });
-    }));
+    (function(q){
+      promises.push(new Promise(function(resolve,reject){
+        fetchFromSheet(sid,Q_GIDS[q],function(err,rows){
+          if(err||!rows||rows.length<5){resolve({qi:q,rows:null});return;}
+          resolve({qi:q,rows:rows,data:processData(q,rows)});
+        });
+      }));
+    })(qi);
   }
   
   Promise.all(promises).then(function(results){
