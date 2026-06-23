@@ -535,6 +535,8 @@ fetchFromSheet(GS_CFG.id,GS_CFG.gid||'0',function(err,rows){if(!err&&rows&&rows.
 function parseCriteria(raw){
   if(!raw||raw===''||raw==='-')return {raw:'-',val:null,op:'',dir:'higher'};
   var s=String(raw).replace(/,/g,'').trim(),op='',dir='higher';
+  // รองรับ Unicode ≤ (U+2264) และ ≥ (U+2265) จาก Excel/Google Sheets
+  s=s.replace(/\u2264/g,'<=').replace(/\u2265/g,'>=');
   if(/^<=/.test(s)){op='<=';s=s.substring(2).trim();dir='lower';}
   else if(/^>=/.test(s)){op='>=';s=s.substring(2).trim();dir='higher';}
   else if(/^</.test(s)){op='<';s=s.substring(1).trim();dir='lower';}
@@ -686,7 +688,7 @@ function renderKPIs(){
     var pass=k.status==='pass',fail=k.status==='fail';
     var badge=pass?'<span class="pass-badge"><i class="fas fa-check me-1"></i>ผ่าน</span>':fail?'<span class="fail-badge"><i class="fas fa-times me-1"></i>ไม่ผ่าน</span>':'<span class="wait-badge"><i class="fas fa-clock me-1"></i>รอผลงาน</span>';
     var pct=k.progress,barColor=pct>=80?PASTEL.success:pct>=50?PASTEL.warning:PASTEL.danger;
-    var cDisp=fmtTxt(critRaw).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    var cDisp=fmtTxt(critRaw);
     var meaning=k.criteriaMeaning?'<span style="color:#b0a8a0;font-size:10px">'+k.criteriaMeaning+'</span>':'';
     (function(idx,kp){
       html+='<div class="kpi-card" onclick="showDetailByRef('+idx+')"><div class="card-body">'+
@@ -706,7 +708,8 @@ function renderKPIs(){
 function showDetailByRef(idx){
   if(idx<0||idx>=KP.length)return;
   var k=KP[idx],cr=k.criteriaParsed,cDisp=esc(fmtTxt(k.criteria));
-  if(cr.val!==null&&cr.op)cDisp=esc(cr.op+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
+  var opDisp={'<=':'≤','>=':'≥','<':'<','>':'>'};
+  if(cr.val!==null&&cr.op)cDisp=esc((opDisp[cr.op]||cr.op)+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
   
   // Build district array with values, sort by value desc, take top 5
   var dlist=[];
@@ -759,7 +762,8 @@ function showDetail(idx){showDetailByRef(idx);}
 function showAllDistricts(idx){
   if(idx<0||idx>=KP.length)return;
   var k=KP[idx],cr=k.criteriaParsed,cDisp=esc(fmtTxt(k.criteria));
-  if(cr.val!==null&&cr.op)cDisp=esc(cr.op+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
+  var opDisp={'<=':'≤','>=':'≥','<':'<','>':'>'};
+  if(cr.val!==null&&cr.op)cDisp=esc((opDisp[cr.op]||cr.op)+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
   var html='<div class="card"><div class="card-header" style="background:#faf8f5;padding:12px 16px;font-size:13px"><i class="fas fa-list me-2" style="color:'+PASTEL.tealDark+'"></i>'+k.name+' — ทั้ง 13 อำเภอ</div>'+
     '<div class="card-body" style="padding:12px">'+
     '<table class="table table-bordered" style="font-size:12px"><thead><tr><th>อำเภอ</th><th>ผลงาน</th><th>เทียบเกณฑ์</th><th>สถานะ</th></tr></thead><tbody>';
@@ -783,7 +787,8 @@ function rQ(){
   var html='';
   for(var i=0;i<l.length;i++){
     var k=l[i],cr=k.criteriaParsed,cDisp=esc(fmtTxt(k.criteria));
-    if(cr.val!==null&&cr.op)cDisp=esc(cr.op+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
+    var opDisp={'<=':'≤','>=':'≥','<':'<','>':'>'};
+  if(cr.val!==null&&cr.op)cDisp=esc((opDisp[cr.op]||cr.op)+' '+fmt(cr.val));else if(cr.val!==null)cDisp=esc(fmt(cr.val));
     var st='<span class="wait-badge">⏳ รอ</span>',note='';
     if(k.value!==null&&cr.val!==null){
       st=k.status==='pass'?'<span class="pass-badge">✅ ผ่าน</span>':'<span class="fail-badge">❌ ไม่ผ่าน</span>';
